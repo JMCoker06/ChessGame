@@ -29,8 +29,8 @@ class Board
     unique_ptr<Piece> squares[8][8];
     public:
     Board();
-    Piece* getPiece(int row, int col) const;
-    void setPiece(int row, int col, Piece* piece);
+    Piece* Board::getPiece(int row, int col) const;
+    void Board::setPiece(int row, int col, Piece* piece);
     void print() const;
 };
 //Defining Piece class 
@@ -58,7 +58,7 @@ class Pawn : public Piece
         int r = getRow();
         int c = getCol();
         // White moves up the board (which decreases row index)
-        //Black moves down the board (which increases row index)
+        // Black moves down the board (which increases row index)
         int direction = (getColor() == Color::White) ? -1 : 1;
         int startRow = (getColor() == Color::White) ? 6 : 1;
         //Move forward one square (if empty)
@@ -67,13 +67,13 @@ class Pawn : public Piece
         {
             moves.push_back({r, c, oneStep, c});
         }
-        //Move foward two squares (if empty and on starting row)
+        // Move foward two squares (if empty and on starting row)
         int twoStep = r + 2 * direction;
         if (twoStep >= 0 && twoStep < 8 && r == startRow && !board.getPiece(twoStep, c))
         {
             moves.push_back({r, c, twoStep, c});
         }
-        //Diagonal captures (if enemy piece is present)
+        // Diagonal captures (if enemy piece is present)
         int captureRow = r + direction; 
         if (captureRow >= 0 && captureRow < 8)
         {
@@ -107,7 +107,31 @@ class Bishop : public Piece
     virtual vector<Move> getLegalMoves(const Board& board, int row, int col) const override
     {
         vector<Move> moves;
+        int r = getRow();
+        int c = getCol();   
         // Bishop move logic here
+        // 4 diagonal directions: (row offset, col offset)
+        int directions[4][2] = {{-1, -1}, {-1, 1}, {1, -1}, {1, 1}};
+        for (const auto& dir : directions)
+        {
+            int newRow = r + dir[0];
+            int newCol = c + dir[1];
+            while (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8)
+            {
+                if (!board.getPiece(newRow, newCol))
+                {
+                    moves.push_back({r, c, newRow, newCol});
+                }
+                else
+                {
+                    if (board.getPiece(newRow, newCol)->getColor() != getColor())
+                    {
+                        moves.push_back({r, c, newRow, newCol});
+                    }
+                    break;
+                }
+            }
+        }
         return moves;
     }
 };
@@ -119,6 +143,29 @@ class Knight : public Piece
     {
         vector<Move> moves;
         // Knight move logic here
+        int r = getRow();
+        int c = getCol();
+        // 8 possible knight moves: (row offset, col offset)
+        int directions[8][2] = {{-2, -1}, {-2, 1}, {-1, -2}, {-1, 2}, {1, -2}, {1, 2}, {2, -1}, {2, 1}};
+        for (const auto& dir : directions)
+        {
+            int newRow = r + dir[0];
+            int newCol = c + dir[1];
+            if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8)
+            {
+                if (!board.getPiece(newRow, newCol))
+                {
+                    moves.push_back({r, c, newRow, newCol});
+                }
+                else
+                {
+                    if (board.getPiece(newRow, newCol)->getColor() != getColor())
+                    {
+                        moves.push_back({r, c, newRow, newCol});
+                    }
+                }
+            }
+        }
         return moves;
     }
 };
@@ -130,6 +177,30 @@ class Rook : public Piece
     {
         vector<Move> moves;
         // Rook move logic here
+        int r = getRow();
+        int c = getCol();   
+        // 4 cardinal directions: (row offset, col offset)
+        int directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+        for (const auto& dir : directions)
+        {
+            int newRow = r + dir[0];
+            int newCol = c + dir[1];
+            while (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8)
+            {
+                if (!board.getPiece(newRow, newCol))
+                {
+                    moves.push_back({r, c, newRow, newCol});
+                }
+                else
+                {
+                    if (board.getPiece(newRow, newCol)->getColor() != getColor())
+                    {
+                        moves.push_back({r, c, newRow, newCol});
+                    }
+                    break;
+                }
+            }
+        }
         return moves;
     }
 };
@@ -141,6 +212,53 @@ class Queen : public Piece
     {
         vector<Move> moves;
         // Queen move logic here
+        // Combine the move logic of the Rook and the Bishop
+        int r = getRow();
+        int c = getCol();
+        // 4 cardinal directions: (row offset, col offset)
+        int directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+        for (const auto& dir : directions)
+        {
+            int newRow = r + dir[0];
+            int newCol = c + dir[1];
+            while (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8)
+            {
+                if (!board.getPiece(newRow, newCol))
+                {
+                    moves.push_back({r, c, newRow, newCol});
+                }
+                else
+                {
+                    if (board.getPiece(newRow, newCol)->getColor() != getColor())
+                    {
+                        moves.push_back({r, c, newRow, newCol});
+                    }
+                    break;
+                }
+            }
+        }
+        // 4 diagonal directions: (row offset, col offset)
+        int diagonalDirections[4][2] = {{-1, -1}, {-1, 1}, {1, -1}, {1, 1}};
+        for (const auto& dir : diagonalDirections)
+        {
+            int newRow = r + dir[0];
+            int newCol = c + dir[1];
+            while (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8)
+            {
+                if (!board.getPiece(newRow, newCol))
+                {
+                    moves.push_back({r, c, newRow, newCol});
+                }
+                else
+                {
+                    if (board.getPiece(newRow, newCol)->getColor() != getColor())
+                    {
+                        moves.push_back({r, c, newRow, newCol});
+                    }
+                    break;
+                }
+            }
+        }
         return moves;
     }
 };
@@ -148,23 +266,45 @@ class King : public Piece
 {
     public:
     King(int r, int c, Color color) : Piece(r, c, color) {}
-     virtual vector<Move> getLegalMoves(const Board& board, int row, int col) const override
+    virtual vector<Move> getLegalMoves(const Board& board, int row, int col) const override
     {
         vector<Move> moves;
         // King move logic here
+        int r = getRow();
+        int c = getCol();
+        // 8 possible directions: (row offset, col offset)
+        int directions[8][2] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1}};
+        for (const auto& dir : directions)
+        {
+            int newRow = r + dir[0];
+            int newCol = c + dir[1];
+            if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8)
+            {
+                if (!board.getPiece(newRow, newCol))
+                {
+                    moves.push_back({r, c, newRow, newCol});
+                }
+                else
+                {
+                    if (board.getPiece(newRow, newCol)->getColor() != getColor())
+                    {
+                        moves.push_back({r, c, newRow, newCol});
+                    }
+                }
+            }
+        }
         return moves;
     }
 };
 class Game
 {
-    Board board;    /// using the Board class
+    Board board;    // using the Board class
     Color currentTurn;
     Move lastMove;
     bool lastMovewasTwoSquarePawnPush;
 };
 
-
-
-
-
-
+Piece *Board::getPiece(int row, int col) const
+{
+    return nullptr;
+}
