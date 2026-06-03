@@ -647,6 +647,122 @@ void Game::checkGameState()
         // Handle check (e.g., notify player, etc.)
     }
 }
+class AI
+{
+    Color aiColor;
+    int searchDepth;
+    private:
+    int minimax(Game& game, int depth, int alpha, int beta, bool maximizingPlayer)
+    {
+        if (depth == 0)
+        {
+            // Evaluate board state and return score
+            return 0; // Placeholder evaluation
+        }
+        vector<Move> allMoves = game.getAllLegalMoves(maximizingPlayer ? aiColor : (aiColor == Color::White ? Color::Black : Color::White));
+        if (maximizingPlayer)
+        {
+            int maxEval = INT_MIN;
+            for (const Move& move : game.getAllLegalMoves(aiColor))
+            {
+                game.movePiece(move.fromRow, move.fromCol, move.toRow, move.toCol);
+                int eval = minimax(game, depth - 1, alpha, beta, false);
+                maxEval = max(maxEval, eval);
+                // Undo the move here
+                game.undoMove(move); // You would need to implement an undoMove function to revert the game state after simulating a move
+                alpha = max(alpha, eval);
+                if (beta <= alpha)
+                {
+                    break; // Alpha-Beta pruning
+                }
+            }
+            return maxEval;
+        }
+        else
+        {
+            Color opponentColor = (aiColor == Color::White) ? Color::Black : Color::White;
+            int minEval = INT_MAX;
+            for (const Move& move : allMoves)
+            {
+                game.movePiece(move.fromRow, move.fromCol, move.toRow, move.toCol);
+                int eval = minimax(game, depth - 1, alpha, beta, true);
+                minEval = min(minEval, eval);
+                // Undo the move here
+                game.undoMove(move); // You would need to implement an undoMove function to revert the game state after simulating a move
+                beta = min(beta, eval);
+                if (beta <= alpha)
+                {
+                    break; // Alpha-Beta pruning
+                }
+            }
+            return minEval;
+        }
+    }
+    int evaluateBoard(const Game& game)
+    {
+        // Implement a heuristic evaluation function to score the board state
+        // Piece values
+        const int pawnValue = 10;
+        const int knightValue = 30;
+        const int bishopValue = 30;
+        const int rookValue = 50;
+        const int queenValue = 90;
+        const int kingValue = 2000; // High value to prioritize king safety
+
+        int score = 0;
+        for (int r = 0; r < 8; r++)
+        {
+            for (int c = 0; c < 8; c++)
+            {
+                Piece* piece = game.getPiece(r, c);
+                if (piece)
+                {
+                    switch (piece->getType())
+                    {
+                        case PieceType::Pawn:
+                            score += piece->getColor() == aiColor ? pawnValue : -pawnValue;
+                            break;
+                        case PieceType::Knight:
+                            score += piece->getColor() == aiColor ? knightValue : -knightValue;
+                            break;
+                        case PieceType::Bishop:
+                            score += piece->getColor() == aiColor ? bishopValue : -bishopValue;
+                            break;
+                        case PieceType::Rook:
+                            score += piece->getColor() == aiColor ? rookValue : -rookValue;
+                            break;
+                        case PieceType::Queen:
+                            score += piece->getColor() == aiColor ? queenValue : -queenValue;
+                            break;
+                        case PieceType::King:
+                            score += piece->getColor() == aiColor ? kingValue : -kingValue;
+                            break;
+                    }
+                }
+            }
+        }
+        return score;
+    }
+    public:
+    AI(Color color, int depth) : aiColor(color), searchDepth(depth) {}
+    Move getBestMove(const Game& game)
+    {
+        vector<Move> allMoves = game.getAllLegalMoves(aiColor);
+        Move bestMove = allMoves[0];
+        int bestScore = INT_MIN;
+        for (const Move& move : allMoves)
+        {
+            game.movePiece(move.fromRow, move.fromCol, move.toRow, move.toCol);
+            int score = minimax(game, searchDepth - 1, false);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestMove = move;
+            }
+        }
+        return bestMove;
+    }
+};
 int main()
 {
     Game game;
