@@ -328,6 +328,7 @@ class Game
     Color currentTurn;
     Move lastMove;
     bool lastMoveWasTwoSquarePawnPush = false; // for en passant logic
+    vector<pair<Move, Piece*>> moveHistory; // for undo functionality
     public:
     Game();
     ~Game();
@@ -341,6 +342,9 @@ class Game
     bool isStalemate(Color color);
     void checkGameState();
     vector<Move> filterLegalMoves(Piece* piece, const vector<Move>& candidates);
+    vector<Move> getAllLegalMoves(Color color);
+    void undoMove();
+    Piece* getPieceAt(int row, int col) const;
 };
 Board::Board()
 {
@@ -500,6 +504,28 @@ vector<Move> Game::filterLegalMoves(Piece* piece, const vector<Move>& candidates
     }
     return legal;
 }
+vector<Move> Game::getAllLegalMoves(Color color)
+{
+    vector<Move> allLegalMoves;
+    for (int r = 0; r < 8; r++)
+    {
+        for (int c = 0; c < 8; c++)
+        {
+            Piece* piece = board.getPiece(r, c);
+            if (piece && piece->getColor() == color)
+            {
+                vector<Move> candidates = piece->getLegalMoves(board, r, c);
+                vector<Move> legalMoves = filterLegalMoves(piece, candidates);
+                allLegalMoves.insert(allLegalMoves.end(), legalMoves.begin(), legalMoves.end());
+            }
+        }
+    }
+    return allLegalMoves;
+}
+Piece* Game::getPieceAt(int row, int col) const
+{
+    return board.getPiece(row, col);
+}
 bool Game::canCastle(Color color, bool kingside) const
 {
     // Castling logic here
@@ -646,6 +672,31 @@ void Game::checkGameState()
         cout << "Check!" << endl;
         // Handle check (e.g., notify player, etc.)
     }
+}
+void Game::undoMove()
+{
+    if (moveHistory.empty())
+        return; // No moves to undo
+
+    auto [move, capturedPiece] = moveHistory.back();
+    moveHistory.pop_back();
+
+    // Move the piece back to its original position
+    Piece* piece = board.releasePiece(move.toRow, move.toCol);
+    board.releasePiece(move.fromRow, move.fromCol); // Clear the from square (should be empty)  
+    board.setPiece(move.fromRow, move.fromCol, piece);
+    board.setPiece(lastMove.toRow, lastMove.toCol, capturedPiece); // Restore captured piece if there was one
+    piece->setRow(move.fromRow);
+    piece->setCol(move.fromCol);
+
+    // Restore captured piece if there was one
+    if (capturedPiece)
+    {
+        board.setPiece(move.toRow, move.toCol, capturedPiece);
+    }
+
+    // Switch back the turn
+    currentTurn = (currentTurn == Color::White) ? Color::Black : Color::White;
 }
 class AI
 {
