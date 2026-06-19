@@ -816,8 +816,55 @@ class AI
 };
 int main()
 {
+    cout << "Welcome to Chess!\n";
+    cout << "Play against: Human or CPU\n";
+    int choice;
+    cin >> choice;
     Game game;
     game.printBoard();
+    AI* ai = nullptr;
+    if (choice == CPU)
+    {
+       cout << "Color: White or Black\n";
+       int color_choice;
+       cin >> color_choice;
+       if (color_choice == White)
+       {
+            ai = new AI(Color::Black, 5); // looks 5 moves ahead
+       }
+       else if (color_choice == Black)
+       {
+            ai = new AI (Color::White, 5); // looks 5 moves ahead
+       }
+    }
+    while (true)
+    {
+        // Human turn
+        string input, toSquare;
+        cout << "\nEnter move, or 'quit' to end match: ";
+        cin >> input;
+        if (input == "quit") break;
+        cin >> toSquare;
+        int fromCol = input[0] - 'a';
+        int fromRow = 8 - (input[1] - '0');
+        int toCol = toSquare[0] - 'a';
+        int toRow = 8 - (toSquare[1] - '0');
+
+        if (!game.movePiece(fromRow, fromCol, toRow, toCol))
+        {
+            cout << "Invalid move, try again.\n";
+            continue;
+        }
+        game.printBoard();
+        // CPU turn
+        if (ai != nullptr)
+        {
+            cout << "CPU is thinking...\n";
+            Move aiMove = ai->getBestMove(game);
+            game.movePiece(aiMove.fromRow, aiMove.fromCol, aiMove.toRow, aiMove.toCol);
+            game.printBoard();
+        }
+    }
 
     // Example game loop
     while (true)
@@ -846,5 +893,6 @@ int main()
             cout << "Invalid move, try again." << endl;
         }
     }
+    delete ai;
     return 0;
 }
