@@ -476,6 +476,22 @@ bool Game::movePiece(int fromRow, int fromCol, int toRow, int toCol)
         }
     }
     return false;
+    if (dynamic_cast<Pawn*>(piece) && (toRow == 0 || toRow == 7))
+    {
+        char choice;
+        cout << "Promote pawn to (Q)ueen, (R)ook, (B)ishop, or (K)night: ";
+        cin >> choice;
+
+        Piece* promoted = nullptr;
+        switch (toupper(choice))
+        {
+            case "R": promoted = new Rook(toRow, toCol, piece->getColor()); break;
+            case "B": promoted = new Bishop(toRow, toCol, piece->getColor()); break;
+            case "K": promoted = new Knight(toRow, toCol, piece->getColor()); break;
+            default: promoted = new Queen(toRow, toCol, piece->getColor()); break;
+        }
+        board.setPiece(toRow, toCol, promoted);
+    }
 }
 vector<Move> Game::filterLegalMoves(Piece* piece, const vector<Move>& candidates)
 {
@@ -662,6 +678,16 @@ bool Game::isStalemate(Color color)
 }
 void Game::checkGameState()
 {
+    bool inCheck = isInCheck(currentTurn);
+    bool hasMoves = !getAllLegalMoves(currentTurn).empty();
+    if (inCheck && !hasMoves)
+    {
+        cout << (currentTurn == Color::White ? "Black" : "White") << " wins by checkmate!\n";
+    }
+    else if (!inCheck && !hasMoves)
+    {
+        cout << "Stalemate! It's a draw.\n";
+    }
     if (isStalemate(currentTurn))
     {
         cout << "Stalemate! It's a draw." << endl;
@@ -830,11 +856,11 @@ int main()
        cin >> color_choice;
        if (color_choice == White)
        {
-            ai = new AI(Color::Black, 5); // looks 5 moves ahead
+            ai = new AI(Color::Black, 4); // looks 4 moves ahead
        }
        else if (color_choice == Black)
        {
-            ai = new AI (Color::White, 5); // looks 5 moves ahead
+            ai = new AI (Color::White, 4); // looks 4 moves ahead
        }
     }
     while (true)
