@@ -9,10 +9,24 @@
 #include <climits> // for additional compatibility
 using namespace std;
 enum class Color {White, Black};
-struct Move //allows the player to be able to move their pieces in-game
+struct Move // allows the player to be able to move their pieces in-game
 {
     int fromRow, fromCol;
     int toRow, toCol;
+};
+struct MoveRecord
+{
+    Move move;
+    Piece* capturedPiece; // nullptr if no capture
+    bool wasEnPassant;
+    int enPassantCapturedRow; // row of pawn captured
+    int enPassantCapturedCol;
+    bool wasPromotion;
+    Piece* originalPawn; // pawn before promotion
+    Color colorBeforeMove;
+    Move previousLastMove; // restores Game's lastMove state
+    bool previousLastMoveWasTwoSquarePawn;
+    bool pieceHadMovedBefore; // King/Rook hasMoved flag restoration 
 };
 //Forward declarations
 class Piece;
@@ -329,12 +343,14 @@ class Game
     Move lastMove;
     bool lastMoveWasTwoSquarePawnPush = false; // for en passant logic
     vector<pair<Move, Piece*>> moveHistory; // for undo functionality
+    vector<MoveRecord> moveHistory;
     public:
     Game();
     ~Game();
     void initializeBoard();
     void printBoard() const;
     bool movePiece(int fromRow, int fromCol, int toRow, int toCol);
+    void undoMove();
     bool canCastle(Color color, bool kingside) const;
     void performCastle(Color color, bool kingside);
     bool isInCheck(Color color) const;
@@ -458,15 +474,37 @@ bool Game::movePiece(int fromRow, int fromCol, int toRow, int toCol)
         const Move& move = legalMoves[i];
         if (move.toRow == toRow && move.toCol == toCol)
         {
+            MoveRecord record;
+            record.move = move;
+            record.previousLastMove = lastMove;
+            record.previousLastMoveWasTwoSquarePawn = lastMoveWasTwoSquarePawnPush;
+            record.colorBeforeMove = currentTurn;
+            record.wasPromotion = false;
+            record.originalPawn = nullptr;
             // Detecting en passant (pawn moves diagonally to empty square)
             bool isEnPassant = dynamic_cast<Pawn*>(piece) != nullptr && fromCol != toCol && board.getPiece(toRow, toCol) == nullptr;
             if (isEnPassant)
             {
+                record.enPassantCapturedRow = fromRow;
+                record.enPassantCapturedCol = toCol;
                 // Captured pawn must be sitting on same row as moving pawn
                 // Must be moving to same column
-                board.releasePiece(fromRow, toCol); //removing captured pawn
+                record.capturedPiece = board.releasePiece(fromRow, toCol); //removing captured pawn
             }
+            else
+            {
+                record.capturedPiece = board.getPiece(toRow, toCol);
+                board.releasePiece(toRow, toCol);
+            }
+
+            // Records King/Rook hasMoved state before changing it
+            King* kingPtr = dynamic_cast<King*>(piece);
+            Rook* rookPtr = dynamic_cast<Rook*>(piece);
+            if (kingPtr) record.pieceHadMovedBefore = kingPtr->getHasMoved();
+            else if (rookPtr) record.pieceHadMovedBefore = rookPtr->getHasMoved();
+            
             // Release ownership before moving
+            // Perform move
             board.releasePiece(fromRow, fromCol);
             board.releasePiece(toRow, toCol);  // discards captured piece
 
@@ -475,31 +513,80 @@ bool Game::movePiece(int fromRow, int fromCol, int toRow, int toCol)
             piece->setRow(toRow);
             piece->setCol(toCol);
 
+            if (kingPtr) kingPtr->setHasMoved(true);
+            if (rookPtr) rookPtr->setHasMoved(true);
+
+            if (dynamic_cast<Pawn*>(piece) && (toRow == 0 || toRow == 7))
+            {
+                char choice;
+                cout << "Promote pawn to (Q)ueen, (R)ook, (B)ishop, or (K)night: ";
+                cin >> choice;
+
+                Piece* promoted = nullptr;
+                switch (toupper(choice))
+                {
+                    case "R": promoted = new Rook(toRow, toCol, piece->getColor()); break;
+                    case "B": promoted = new Bishop(toRow, toCol, piece->getColor()); break;
+                    case "K": promoted = new Knight(toRow, toCol, piece->getColor()); break;
+                    default: promoted = new Queen(toRow, toCol, piece->getColor()); break;
+                }
+                board.releasePiece(toRow, toCol);
+                board.setPiece(toRow, toCol, promoted);
+            }
             lastMove = move;
             lastMoveWasTwoSquarePawnPush = (dynamic_cast<Pawn*>(piece) != nullptr &&
                                             abs(move.toRow - move.fromRow) == 2);
             currentTurn = (currentTurn == Color::White) ? Color::Black : Color::White;
+            moveHistory.push_back(record);
             checkGameState();
             return true;
         }
     }
     return false;
-    if (dynamic_cast<Pawn*>(piece) && (toRow == 0 || toRow == 7))
+}
+void Game::undoMove()
+{
+    if (moveHistory.empty()) return;
+    MoveRecord record = moveHistory.back();
+    moveHistory.pop_back();
+    Move m = record.move;
+    // Get piece that is currently sitting at destination
+    Piece* movedPiece = board.releasePiece(m.toRow, m.toCol);
+    if (record.wasPromotion)
     {
-        char choice;
-        cout << "Promote pawn to (Q)ueen, (R)ook, (B)ishop, or (K)night: ";
-        cin >> choice;
-
-        Piece* promoted = nullptr;
-        switch (toupper(choice))
-        {
-            case "R": promoted = new Rook(toRow, toCol, piece->getColor()); break;
-            case "B": promoted = new Bishop(toRow, toCol, piece->getColor()); break;
-            case "K": promoted = new Knight(toRow, toCol, piece->getColor()); break;
-            default: promoted = new Queen(toRow, toCol, piece->getColor()); break;
-        }
-        board.setPiece(toRow, toCol, promoted);
+        delete movedPiece;
+        movedPiece = record.originalPawn;
     }
+
+    board.setPiece(m.fromRow, m.fromCol, movedPiece);
+    movedPiece->setRow(m.fromRow);
+    movedPiece->setCol(m.fromCol);
+    // Restore hasMoved flag
+    if (King* k = dynamic_cast<King*>(movedPiece))
+    {
+        k->setHasMoved(record.pieceHadMovedBefore);
+    }
+    if (Rook* r = dynamic_cast<Rook*>(movedPiece))
+    {
+        r->setHasMoved(record.pieceHadMovedBefore);
+    }
+    // Restore captured piece
+    if (record.wasEnPassant)
+    {
+        // Captured pawn back to original square
+        board.setPiece(record.enPassantCapturedRow, record.enPassantCapturedCol, record.capturedPiece);
+        board.setPiece(m.toRow, m.toCol, nullptr);     
+    }
+    else
+    {
+        // Normal capture (or nullptr if no capture) goes back to destination
+        board.setPiece(m.toRow, m.toCol, record.capturedPiece);
+    }
+
+    // Restore game state
+    currentTurn = record.colorBeforeMove;
+    lastMove = record.previousLastMove;
+    lastMoveWasTwoSquarePawnPush = record.previousLastMoveWasTwoSquarePawn;
 }
 vector<Move> Game::filterLegalMoves(Piece* piece, const vector<Move>& candidates)
 {
