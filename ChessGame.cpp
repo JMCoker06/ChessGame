@@ -31,7 +31,7 @@ class Piece
     int getCol() const { return col; }
     void setRow(int r) { row = r; }
     void setCol(int c) { col = c; }
-    virtual vector<Move> getLegalMoves(const Board& board, int row, int col) const = 0;
+    virtual vector<Move> getLegalMoves(const Board& board, int row, int col, Move lastMove = {-1, -1, -1, -1}, bool lastMoveWasTwoSquarePawn = false) const = 0;
     virtual ~Piece() = default;
 };
 //Defining Square class 
@@ -63,7 +63,7 @@ class Pawn : public Piece
 {
     public:
     Pawn(int r, int c, Color color) : Piece(r, c, color) {}
-    virtual vector<Move> getLegalMoves(const Board& board, int row, int col) const override
+    virtual vector<Move> getLegalMoves(const Board& board, int row, int col, Move lastMove = {-1, -1, -1, -1}, bool lastMoveWasTwoSquarePawn = false) const override
     {
         vector<Move> moves;
         // Pawn move logic here
@@ -101,14 +101,14 @@ class Pawn : public Piece
             }
         }
         // En passant (tracks the last move made)
-        // int enPassantRow = (getColor() == Color::White) ? 3 : 4;
-        // if (r == enPassantRow && lastMove was a two-square pawn push)
-        // {
-        //     if (lastMove.toCol == c - 1 || lastMove.toCol == c + 1)
-        //     {
-        //         moves.push_back({r, c, r + direction, lastMove.toCol});
-        //     }
-        // }
+        int enPassantRow = (getColor() == Color::White) ? 3 : 4;
+        if (r == enPassantRow && lastMove was a two-square pawn push)
+        {
+            if (lastMove.toCol == c - 1 || lastMove.toCol == c + 1)
+            {
+                moves.push_back({r, c, r + direction, lastMove.toCol});
+            }
+        }
         return moves;
     }
 };
@@ -116,7 +116,7 @@ class Bishop : public Piece
 {
     public:
     Bishop(int r, int c, Color color) : Piece(r, c, color) {}
-    virtual vector<Move> getLegalMoves(const Board& board, int row, int col) const override
+    virtual vector<Move> getLegalMoves(const Board& board, int row, int col, Move lastMove = {-1, -1, -1, -1}, bool lastMoveWasTwoSquarePawn = false) const override
     {
         vector<Move> moves;
         int r = getRow();
@@ -153,7 +153,7 @@ class Knight : public Piece
 {
     public:
     Knight(int r, int c, Color color) : Piece(r, c, color) {}
-    virtual vector<Move> getLegalMoves(const Board& board, int row, int col) const override
+    virtual vector<Move> getLegalMoves(const Board& board, int row, int col, Move lastMove = {-1, -1, -1, -1}, bool lastMoveWasTwoSquarePawn = false) const override
     {
         vector<Move> moves;
         // Knight move logic here
@@ -190,7 +190,7 @@ class Rook : public Piece
     Rook(int r, int c, Color color) : Piece(r, c, color) {}
     void setHasMoved(bool moved) { hasMoved = moved; }
     bool getHasMoved() const { return hasMoved; }
-    virtual vector<Move> getLegalMoves(const Board& board, int row, int col) const override
+    virtual vector<Move> getLegalMoves(const Board& board, int row, int col, Move lastMove = {-1, -1, -1, -1}, bool lastMoveWasTwoSquarePawn = false) const override
     {
         vector<Move> moves;
         // Rook move logic here
@@ -227,7 +227,7 @@ class Queen : public Piece
 {
     public:
     Queen(int r, int c, Color color) : Piece(r, c, color) {}
-    virtual vector<Move> getLegalMoves(const Board& board, int row, int col) const override
+    virtual vector<Move> getLegalMoves(const Board& board, int row, int col, Move lastMove = {-1, -1, -1, -1}, bool lastMoveWasTwoSquarePawn = false) const override
     {
         vector<Move> moves;
         // Queen move logic here
@@ -292,7 +292,7 @@ class King : public Piece
     King(int r, int c, Color color) : Piece(r, c, color) {}
     void setHasMoved(bool moved) { hasMoved = moved; }
     bool getHasMoved() const { return hasMoved; }
-    virtual vector<Move> getLegalMoves(const Board& board, int row, int col) const override
+    virtual vector<Move> getLegalMoves(const Board& board, int row, int col, Move lastMove = {-1, -1, -1, -1}, bool lastMoveWasTwoSquarePawn = false) const override
     {
         vector<Move> moves;
         // King move logic here
@@ -450,7 +450,7 @@ bool Game::movePiece(int fromRow, int fromCol, int toRow, int toCol)
     if (piece == nullptr || piece->getColor() != currentTurn)
         return false;
 
-    vector<Move> candidates = piece->getLegalMoves(board, fromRow, fromCol);
+    vector<Move> candidates = piece->getLegalMoves(board, fromRow, fromCol, lastMove, lastMoveWasTwoSquarePawnPush);
     vector<Move> legalMoves = filterLegalMoves(piece, candidates);
 
     for (int i = 0; i < legalMoves.size(); i++)
@@ -458,6 +458,14 @@ bool Game::movePiece(int fromRow, int fromCol, int toRow, int toCol)
         const Move& move = legalMoves[i];
         if (move.toRow == toRow && move.toCol == toCol)
         {
+            // Detecting en passant (pawn moves diagonally to empty square)
+            bool isEnPassant = dynamic_cast<Pawn*>(piece) != nullptr && fromCol != toCol && board.getPiece(toRow, toCol) == nullptr;
+            if (isEnPassant)
+            {
+                // Captured pawn must be sitting on same row as moving pawn
+                // Must be moving to same column
+                board.releasePiece(fromRow, toCol); //removing captured pawn
+            }
             // Release ownership before moving
             board.releasePiece(fromRow, fromCol);
             board.releasePiece(toRow, toCol);  // discards captured piece
@@ -530,7 +538,7 @@ vector<Move> Game::getAllLegalMoves(Color color)
             Piece* piece = board.getPiece(r, c);
             if (piece && piece->getColor() == color)
             {
-                vector<Move> candidates = piece->getLegalMoves(board, r, c);
+                vector<Move> candidates = piece->getLegalMoves(board, r, c, lastMove, lastMoveWasTwoSquarePawnPush);
                 vector<Move> legalMoves = filterLegalMoves(piece, candidates);
                 allLegalMoves.insert(allLegalMoves.end(), legalMoves.begin(), legalMoves.end());
             }
@@ -639,7 +647,7 @@ bool Game::isSquareAttacked(int row, int col, Color attackerColor) const
             Piece* piece = board.getPiece(r, c);
             if (piece && piece->getColor() == attackerColor)
             {
-                vector<Move> moves = piece->getLegalMoves(board, r, c);
+                vector<Move> moves = piece->getLegalMoves(board, r, c, lastMove, lastMoveWasTwoSquarePawnPush);
                 for (const Move& move : moves)
                 {
                     if (move.toRow == row && move.toCol == col)
@@ -666,7 +674,7 @@ bool Game::isStalemate(Color color)
             Piece* piece = board.getPiece(r, c);
             if (piece && piece->getColor() == color)
             {
-                vector<Move> moves = piece->getLegalMoves(board, r, c);
+                vector<Move> moves = piece->getLegalMoves(board, r, c, lastMove, lastMoveWasTwoSquarePawnPush);
                 if (!moves.empty())
                 {
                     return false; // Not stalemate if there are legal moves
