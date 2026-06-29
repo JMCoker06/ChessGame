@@ -7,6 +7,7 @@
 #include <stdexcept> // for bounds checking exceptions
 #include <cstdlib> // for nullptr support
 #include <climits> // for additional compatibility
+#include <map> 
 using namespace std;
 enum class Color {White, Black};
 struct Move // allows the player to be able to move their pieces in-game
@@ -344,6 +345,8 @@ class Game
     bool lastMoveWasTwoSquarePawnPush = false; // for en passant logic
     vector<pair<Move, Piece*>> moveHistory; // for undo functionality
     vector<MoveRecord> moveHistory;
+    map<string, int> positionHistory;
+    bool gameOver = false;
     public:
     Game();
     ~Game();
@@ -356,11 +359,14 @@ class Game
     bool isInCheck(Color color) const;
     bool isSquareAttacked(int row, int col, Color attackerColor) const;
     bool isStalemate(Color color);
+    bool isThreefoldRepetition() const;
     void checkGameState();
     vector<Move> filterLegalMoves(Piece* piece, const vector<Move>& candidates);
+    bool isGameOver () const { return gameOver; }
     vector<Move> getAllLegalMoves(Color color);
     void undoMove();
     Piece* getPieceAt(int row, int col) const;
+    string getPositionKey() const;
 };
 Board::Board()
 {
@@ -538,6 +544,10 @@ bool Game::movePiece(int fromRow, int fromCol, int toRow, int toCol)
                                             abs(move.toRow - move.fromRow) == 2);
             currentTurn = (currentTurn == Color::White) ? Color::Black : Color::White;
             moveHistory.push_back(record);
+            //Record position for threefold repetition
+            string posKey = getPositionKey();
+            positionHistory[posKey]++;
+
             checkGameState();
             return true;
         }
@@ -771,6 +781,12 @@ bool Game::isStalemate(Color color)
     }
     return true; // Stalemate if no legal moves and not in check
 }
+bool Game::isThreefoldRepetition() const;
+{
+    string currentKey = getPositionKey();
+    auto it = positionHistory.find(currentKey);
+    return it != positionHistory.end() && it->second >= 3;
+}
 void Game::checkGameState()
 {
     bool inCheck = isInCheck(currentTurn);
@@ -782,6 +798,11 @@ void Game::checkGameState()
     else if (!inCheck && !hasMoves)
     {
         cout << "Stalemate! It's a draw.\n";
+    }
+    else if (isThreefoldRepetition()) // Threefold repetiton check
+    {
+        cout << "Draw by threefold repetition!\n";
+        gameOver = true;
     }
     if (isStalemate(currentTurn))
     {
@@ -796,8 +817,12 @@ void Game::checkGameState()
 }
 void Game::undoMove()
 {
-    if (moveHistory.empty())
-        return; // No moves to undo
+    if (moveHistory.empty()) return; // No moves to undo
+
+    string currentKey = getPositionKey();
+    positionHistory[currentKey]--;
+    if (positionHistory[currentKey] <= 0)
+        positionHistory.erase(currentKey);
 
     auto [move, capturedPiece] = moveHistory.back();
     moveHistory.pop_back();
@@ -818,6 +843,72 @@ void Game::undoMove()
 
     // Switch back the turn
     currentTurn = (currentTurn == Color::White) ? Color::Black : Color::White;
+}
+string Game::getPositionKey() const
+{
+    string key;
+    // Encoding every square on the board
+    for (int r = 0; r < 8; r++)
+    {
+        for (int c = 0; c < 8; c++)
+        {
+            Piece* p = board.getPiece(r, c);
+            if (p == nullptr)
+            {
+                key += '.';
+            }
+            else
+            {
+                char symbol = '?';
+                if      (dynamic_cast<Pawn*>(p))   symbol = 'P';
+                else if (dynamic_cast<Rook*>(p))   symbol = 'R';
+                else if (dynamic_cast<Knight*>(p)) symbol = 'N';
+                else if (dynamic_cast<Bishop*>(p)) symbol = 'B';
+                else if (dynamic_cast<Queen*>(p))  symbol = 'Q';
+                else if (dynamic_cast<King*>(p))   symbol = 'K';
+
+                if (p -> getColor() = Color::Black)
+                    symbol = tolower(symbol);
+                key += symbol;
+            }
+        }
+    }
+    // Same pieces, different turn = different position
+    key += (currentTurn == Color::White) ? 'W' : 'B';
+
+    // Castling rights
+    Piece* whiteKing = nullptr, *blackKing = nullptr;
+    Piece* whiteKingsideRook = board.getPiece(7, 7);
+    Piece* whiteQueensideRook = board.getPiece(7, 0);
+    Piece* blackKingsideRook = board.getPiece(0, 7);
+    Piece* blackQueensideRook = board.getPiece(0, 0);
+
+    for (int c = 0; c < 8; c++)
+    {
+        if (King* k = dynamic_cast<King*>(board.getPiece(7, c))) whiteKing = k;
+        if (King* k = dynamic_cast<King*>(board.getPiece(0, c))) blackKing = k;
+    }
+
+    auto hasMoved = [](Piece* p) -> bool 
+    {
+        if (King* k = dynamic_cast<King*>(p)) return k->getHasMoved();
+        if (Rook* r = dynamic_cast<Rook*>(p)) return r->getHasMoved();
+        return true; //treat missing pieces as "moved"
+    };
+
+    key += hasMoved(whiteKing) ? '0' : '1';
+    key += hasMoved(whiteKingsideRook) ? '0' : '1';
+    key += hasMoved(whiteQueensideRook) ? '0' : '1';
+    key += hasMoved(blackKing) ? '0' : '1'; 
+    key += hasMoved(blackKingsideRook) ? '0' : '1';
+    key += hasMoved(blackQueensideRook) ? '0' : '1';
+
+    if (lastMoveWasTwoSquarePawnPush)
+    {
+        key += 'E';
+        key += to_string(lastMove.toCol);
+    }
+    return key;
 }
 class AI
 {
@@ -988,7 +1079,7 @@ int main()
     }
 
     // Example game loop
-    while (true)
+    while (!game.isGameOver()) // using getter
     {
         string input;
         cout << "\nEnter move (e.g. e2 e4), or 'quit' to exit: ";
