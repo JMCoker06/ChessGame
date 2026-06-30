@@ -8,6 +8,7 @@
 #include <cstdlib> // for nullptr support
 #include <climits> // for additional compatibility
 #include <map> 
+#include <chrono> 
 using namespace std;
 enum class Color {White, Black};
 struct Move // allows the player to be able to move their pieces in-game
@@ -347,6 +348,9 @@ class Game
     vector<MoveRecord> moveHistory;
     map<string, int> positionHistory;
     bool gameOver = false;
+    chrono::seconds whiteTimeRemaining;
+    chrono::seconds blackTimeRemaining;
+    chrono::steady_clock::time_point turnStartTime;
     public:
     Game();
     ~Game();
@@ -361,6 +365,9 @@ class Game
     bool isStalemate(Color color);
     bool isThreefoldRepetition() const;
     void checkGameState();
+    void startTurnTimer();
+    bool checkTimeAndDeductElapsed(); 
+    chrono::seconds getTimeRemaining(Color color) const;
     vector<Move> filterLegalMoves(Piece* piece, const vector<Move>& candidates);
     bool isGameOver () const { return gameOver; }
     vector<Move> getAllLegalMoves(Color color);
@@ -422,7 +429,8 @@ void Board::print() const
     }
     cout << "  a b c d e f g h\n";
 }
-Game::Game() : currentTurn(Color::White), lastMove{0, 0, 0, 0}, lastMoveWasTwoSquarePawnPush(false)
+Game::Game() : currentTurn(Color::White), lastMove{0, 0, 0, 0}, lastMoveWasTwoSquarePawnPush(false), 
+whiteTimeRemaining(chrono::seconds(600)), blackTimeRemaining(chrono::seconds(600))
 {
     initializeBoard();
 }
@@ -464,6 +472,17 @@ void Game::initializeBoard()
 void Game::printBoard() const
 {
     board.print();
+
+    auto formatTime = [](chrono::seconds s)
+    {
+        int totalSeconds = max(0, (int)s.count());
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+        return to_string(minutes) + ":" + (seconds < 10 ? "0" : "") + to_string(seconds);
+    };
+
+    cout << "White time: " << formatTime(whiteTimeRemaining) << "\n";
+    cout << "Black time: " << formatTime(blackTimeRemaining) << "\n";
 }
 bool Game::movePiece(int fromRow, int fromCol, int toRow, int toCol)
 {
@@ -815,6 +834,40 @@ void Game::checkGameState()
         // Handle check (e.g., notify player, etc.)
     }
 }
+void Game::startTurnTimer()
+{
+    turnStartTime = chrono::steady_clock::now();
+}
+bool Game::checkTimeAndDeductElapsed()
+{
+    auto now = chrono::steady_clock::now();
+    auto elapsed = chrono::duration_cast<chrono::seconds>(now - turnStartTime)
+
+    if (currentTurn == Color::White)
+    {
+        if (whiteTimeRemaining <= chrono::seconds(0))
+        {
+            cout << "White ran out of time! Black wins!\n";
+            gameOver = true;
+            return false;
+        }
+    }
+    else
+    {
+        blackTImeRemaining -= elapsed;
+        if (blackTimeRemaining <= chrono::seconds(0))
+        {
+            cout << "Black ran out of time! White wins!\n";
+            gameOver = true;
+            return false;
+        }
+    }
+    return true;
+}
+chrono::seconds Game::getTimeRemaining(Color color) const
+{
+    return (color = Color::White) ? whiteTimeRemaining : blackTimeRemaining;
+}
 void Game::undoMove()
 {
     if (moveHistory.empty()) return; // No moves to undo
@@ -1035,28 +1088,35 @@ int main()
     Game game;
     game.printBoard();
     AI* ai = nullptr;
-    if (choice == CPU)
+    if (choice == "CPU")
     {
        cout << "Color: White or Black\n";
        int color_choice;
        cin >> color_choice;
-       if (color_choice == White)
+       if (color_choice == "White")
        {
             ai = new AI(Color::Black, 4); // looks 4 moves ahead
        }
-       else if (color_choice == Black)
+       else if (color_choice == "Black")
        {
             ai = new AI (Color::White, 4); // looks 4 moves ahead
        }
     }
-    while (true)
+    while (!game.isGameOver) // using getter
     {
         // Human turn
         string input, toSquare;
         cout << "\nEnter move, or 'quit' to end match: ";
+        
+        game.startTurnTimer(); // starts timing
+        
         cin >> input;
         if (input == "quit") break;
         cin >> toSquare;
+
+        if (!game.checkTimeAndDeductElapsed())
+            break;
+
         int fromCol = input[0] - 'a';
         int fromRow = 8 - (input[1] - '0');
         int toCol = toSquare[0] - 'a';
@@ -1068,9 +1128,12 @@ int main()
             continue;
         }
         game.printBoard();
+
+        if (game.isGameOver()) break;
         // CPU turn
         if (ai != nullptr)
         {
+            game.startTurnTimer();
             cout << "CPU is thinking...\n";
             Move aiMove = ai->getBestMove(game);
             game.movePiece(aiMove.fromRow, aiMove.fromCol, aiMove.toRow, aiMove.toCol);
