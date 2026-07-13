@@ -1082,22 +1082,71 @@ class AI
 int main()
 {
     cout << "Welcome to Chess!\n";
-    cout << "Play against: Human or CPU\n";
+    cout << "Play against: (1) Human or (2) CPU\n";
     int choice;
     cin >> choice;
     Game game;
+    // Timer prompt
+    cout << "Enable timer? (1) Yes (2) No\n";
+    int timerChoice;
+    cin >> timerChoice;
+    if (timerChoice == 1)
+    {
+        //cout << "Enter time per side in minutes: ";
+        //int minutes
+        //cin >> minutes;
+        //game.enableTimer(minutes * 60);
+        cout << "\nSelect time control:\n";
+        cout << "(1) Bullet - 1 minute\n"
+        cout << "(2) Blitz - 5 minutes\n"
+        cout << "(3) Rapid - 10 minutes\n"
+        cout << "(4) Classical - 30 minutes\n"
+        cout << "(5) Custom\n";
+
+        int timeChoice;
+        cin >> timeChoice;
+
+        int seconds = 0;
+        switch (timeChoice)
+        {
+            case 1: seconds = 60;
+                    cout << "Bullet selected: 1 minute per side\n";
+                    break;
+            case 2: seconds = 300;
+                    cout << "Blitz selected: 5 minutes per side\n";
+                    break;
+            case 3: seconds = 600;
+                    cout << "Rapid selected: 10 minutes per side\n";
+                    break;
+            case 4: seconds = 1800;
+                    cout << "Classical selected: 30 minutes per side\n";
+                    break;
+            case 5:
+                cout << "Enter time per side in minutes: ";
+                int minutes;
+                cin >> minutes;
+                seconds = minutes * 60;
+                cout << "Custom time set: " << minutes << " minutes per side\n";
+                break;
+            default:
+                cout << "Invalid choice, defaulting to 10 minutes.\n";
+                seconds = 600;
+                break;
+        }
+        game.enableTimer(seconds);
+    }
     game.printBoard();
     AI* ai = nullptr;
-    if (choice == "CPU")
+    if (choice == 2)
     {
-       cout << "Color: White or Black\n";
+       cout << "Color: (1) White or (2) Black\n";
        int color_choice;
        cin >> color_choice;
-       if (color_choice == "White")
+       if (color_choice == 1)
        {
             ai = new AI(Color::Black, 4); // looks 4 moves ahead
        }
-       else if (color_choice == "Black")
+       else if (color_choice == 2)
        {
             ai = new AI (Color::White, 4); // looks 4 moves ahead
        }
@@ -1137,35 +1186,8 @@ int main()
             cout << "CPU is thinking...\n";
             Move aiMove = ai->getBestMove(game);
             game.movePiece(aiMove.fromRow, aiMove.fromCol, aiMove.toRow, aiMove.toCol);
+            game.checkTimeAndDeductElapsed();
             game.printBoard();
-        }
-    }
-
-    // Example game loop
-    while (!game.isGameOver()) // using getter
-    {
-        string input;
-        cout << "\nEnter move (e.g. e2 e4), or 'quit' to exit: ";
-        cin >> input;
-        if (input == "quit") break;
-
-        string toSquare;
-        cin >> toSquare;
-
-        // Convert chess notation to row/col
-        // e.g. "e2" -> col = 4, row = 6
-        int fromCol = input[0] - 'a';
-        int fromRow = 8 - (input[1] - '0');
-        int toCol   = toSquare[0] - 'a';
-        int toRow   = 8 - (toSquare[1] - '0');
-
-        if (game.movePiece(fromRow, fromCol, toRow, toCol))
-        {
-            game.printBoard();
-        }
-        else
-        {
-            cout << "Invalid move, try again." << endl;
         }
     }
     delete ai;
