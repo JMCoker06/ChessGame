@@ -23,6 +23,7 @@ struct MoveRecord
     bool wasEnPassant;
     int enPassantCapturedRow; // row of pawn captured
     int enPassantCapturedCol;
+    int previousHalfMoveClock;
     bool wasPromotion;
     Piece* originalPawn; // pawn before promotion
     Color colorBeforeMove;
@@ -351,6 +352,7 @@ class Game
     chrono::seconds whiteTimeRemaining;
     chrono::seconds blackTimeRemaining;
     chrono::steady_clock::time_point turnStartTime;
+    int halfMoveClock = 0; // resets on pawn move or capture
     public:
     Game();
     ~Game();
@@ -364,6 +366,7 @@ class Game
     bool isSquareAttacked(int row, int col, Color attackerColor) const;
     bool isStalemate(Color color);
     bool isThreefoldRepetition() const;
+    bool isFiftyMoveRule() const;
     void checkGameState();
     void startTurnTimer();
     bool checkTimeAndDeductElapsed(); 
@@ -494,6 +497,12 @@ bool Game::movePiece(int fromRow, int fromCol, int toRow, int toCol)
     vector<Move> candidates = piece->getLegalMoves(board, fromRow, fromCol, lastMove, lastMoveWasTwoSquarePawnPush);
     vector<Move> legalMoves = filterLegalMoves(piece, candidates);
 
+    bool isPawnMove = dynamic_cast<Pawn*>(piece) != nullptr;
+    bool isCapture = record.capturedPiece != nullptr;
+    record.previousHalfMoveClock = halfMoveClock;
+    if (isPawnMove || isCapture)
+        halfMoveClock = 0; // resets on pawn move or capture
+    elsehalfMoveClock++; // increment if there is no pawn move or capture
     for (int i = 0; i < legalMoves.size(); i++)
     {
         const Move& move = legalMoves[i];
@@ -616,6 +625,7 @@ void Game::undoMove()
     currentTurn = record.colorBeforeMove;
     lastMove = record.previousLastMove;
     lastMoveWasTwoSquarePawnPush = record.previousLastMoveWasTwoSquarePawn;
+    halfMoveClock = record.previousHalfMoveClock;
 }
 vector<Move> Game::filterLegalMoves(Piece* piece, const vector<Move>& candidates)
 {
@@ -806,6 +816,10 @@ bool Game::isThreefoldRepetition() const;
     auto it = positionHistory.find(currentKey);
     return it != positionHistory.end() && it->second >= 3;
 }
+bool Game::isFiftyMoveRule() const
+{
+    return halfMoveClock >= 100;
+}
 void Game::checkGameState()
 {
     bool inCheck = isInCheck(currentTurn);
@@ -823,7 +837,12 @@ void Game::checkGameState()
         cout << "Draw by threefold repetition!\n";
         gameOver = true;
     }
-    if (isStalemate(currentTurn))
+    else if (isFiftyMoveRule())
+    {
+        cout << "Draw by 50-move rule!\n";
+        gameOver = true;
+    }
+    else if (isStalemate(currentTurn))
     {
         cout << "Stalemate! It's a draw." << endl;
         // Handle stalemate (e.g., end game, reset, etc.)
